@@ -19,11 +19,10 @@ df['file_name'] = df['file_name'].apply(lambda x: x + 'g' if x.endswith('jp') el
 
 train_loader, valid_loader = prepare_dataloaders(df, valid_size = 0.3, '../data/images/', batch_size = 4)
 
-download_model_files(dest = './encoder_decoder_model/')
-state_dict = torch.load('/content/encoder_decoder_model/models--microsoft--trocr-base-handwritten/snapshots/0cc7abaad739c7902dabd562356c7e6a7be834ea/pytorch_model.bin')
+# Load the model from a path
+state_dict = torch.load('../fine_tuned_models/ocr_v2.bin')
 
-
-with open('/content/encoder_decoder_model/models--microsoft--trocr-base-handwritten/snapshots/0cc7abaad739c7902dabd562356c7e6a7be834ea/config.json', 'r') as f:
+with open('config.json', 'r') as f:
     config = json.load(f)
 
 config = VisionEncoderDecoderConfig(encoder = config['encoder'], decoder = config['decoder'])
@@ -49,7 +48,7 @@ model = model.to(device)
 
 optimizer = AdamW(model.parameters(), lr=5e-5)
 
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(10):  
    # train
    model.train()
    train_loss = 0.0
@@ -58,7 +57,6 @@ for epoch in range(10):  # loop over the dataset multiple times
       for k,v in batch.items():
         batch[k] = v.to(device)
 
-      # forward + backward + optimize
       outputs = model(**batch)
       loss = outputs.loss
       loss.backward()
@@ -82,4 +80,5 @@ for epoch in range(10):  # loop over the dataset multiple times
 
    print("Validation CER:", valid_cer / len(valid_loader))
 
-torch.save(model.state_dict(), './finetuned_models/models/ocr_v1.pt')
+# change the path where you want to save
+torch.save(model.state_dict(), '../fine_tuned_models/ocr_v3.pt')

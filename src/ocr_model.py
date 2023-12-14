@@ -30,16 +30,14 @@ class VisionEncoderDecoderConfig(PretrainedConfig):
 
     @classmethod
     def from_encoder_decoder_configs(cls, encoder_config: PretrainedConfig, decoder_config: PretrainedConfig, **kwargs):
-        # logger.info("Setting `config.is_decoder=True` and `config.add_cross_attention=True` for decoder_config")
+
         decoder_config.is_decoder = True
         decoder_config.add_cross_attention = True
 
         return cls(encoder=encoder_config.to_dict(), decoder=decoder_config.to_dict(), **kwargs)
 
 def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start_token_id: int):
-    """
-    Shift input ids one token to the right.
-    """
+
     shifted_input_ids = input_ids.new_zeros(input_ids.shape)
     shifted_input_ids[:, 1:] = input_ids[:, :-1].clone()
     if decoder_start_token_id is None:
@@ -48,7 +46,7 @@ def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start
 
     if pad_token_id is None:
         raise ValueError("Make sure to set the pad_token_id attribute of the model's configuration.")
-    # replace possible -100 values in labels by `pad_token_id`
+
     shifted_input_ids.masked_fill_(shifted_input_ids == -100, pad_token_id)
 
     return shifted_input_ids
@@ -64,7 +62,6 @@ class VisionEncoderDecoderModel(PreTrainedModel):
         self.encoder = encoder
         self.decoder = decoder
 
-        # encoder outputs might need to be projected to different dimension for decoder
         if (
             self.encoder.config.hidden_size != self.decoder.config.hidden_size
             and self.decoder.config.cross_attention_hidden_size is None
@@ -147,10 +144,6 @@ class VisionEncoderDecoderModel(PreTrainedModel):
                 labels, self.config.pad_token_id, self.config.decoder_start_token_id
             )
 
-        # Decode
-
-        # decoder_attention_mask = torch.tensor([[1]])
-        # decoder_input_ids =  torch.tensor([[2]])
         decoder_outputs = self.decoder(
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
@@ -165,7 +158,6 @@ class VisionEncoderDecoderModel(PreTrainedModel):
             **kwargs_decoder,
         )
 
-        # Compute loss independent from decoder (as some shift the logits inside them)
         loss = None
         if labels is not None:
             logits = decoder_outputs.logits if return_dict else decoder_outputs[0]

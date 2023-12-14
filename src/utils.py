@@ -36,8 +36,7 @@ def _load_state_dict_into_model(model_to_load, state_dict, start_prefix):
             new_keys.append(new_key)
     for old_key, new_key in zip(old_keys, new_keys):
         state_dict[new_key] = state_dict.pop(old_key)
-
-    # copy state_dict so _load_from_state_dict can modify it
+        
     metadata = getattr(state_dict, "_metadata", None)
     state_dict = state_dict.copy()
     if metadata is not None:
@@ -48,8 +47,6 @@ def _load_state_dict_into_model(model_to_load, state_dict, start_prefix):
     def load(module: nn.Module, state_dict, prefix=""):
         local_metadata = {} if metadata is None else metadata.get(prefix[:-1], {})
         args = (state_dict, prefix, local_metadata, True, [], [], error_msgs)
-        # Parameters of module and children will start with prefix. We can exit early if there are none in this
-        # state_dict
         if len([key for key in state_dict if key.startswith(prefix)]) > 0:
             if is_deepspeed_zero3_enabled():
                 
@@ -67,8 +64,6 @@ def _load_state_dict_into_model(model_to_load, state_dict, start_prefix):
                 load(child, state_dict, prefix + name + ".")
 
     load(model_to_load, state_dict, prefix=start_prefix)
-    # Delete `state_dict` so it could be collected by GC earlier. Note that `state_dict` is a copy of the argument, so
-    # it's safe to delete it.
     del state_dict
 
     return error_msgs

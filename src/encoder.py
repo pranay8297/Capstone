@@ -16,84 +16,6 @@ from transformers.utils import logging
 from transformers.pytorch_utils import find_pruneable_heads_and_indices, prune_linear_layer
 from transformers.utils import add_code_sample_docstrings, add_start_docstrings, add_start_docstrings_to_model_forward, logging, replace_return_docstrings
 
-encoder_config = {
-    "_name_or_path": "",
-    "add_cross_attention": False,
-    "architectures": None,
-    "attention_probs_dropout_prob": 0.0,
-    "bad_words_ids": None,
-    "begin_suppress_tokens": None,
-    "bos_token_id": None,
-    "chunk_size_feed_forward": 0,
-    "cross_attention_hidden_size": None,
-    "decoder_start_token_id": None,
-    "diversity_penalty": 0.0,
-    "do_sample": False,
-    "early_stopping": False,
-    "encoder_no_repeat_ngram_size": 0,
-    "encoder_stride": 16,
-    "eos_token_id": None,
-    "exponential_decay_length_penalty": None,
-    "finetuning_task": None,
-    "forced_bos_token_id": None,
-    "forced_eos_token_id": None,
-    "hidden_act": "gelu",
-    "hidden_dropout_prob": 0.0,
-    "hidden_size": 768,
-    "id2label": {
-      "0": "LABEL_0",
-      "1": "LABEL_1"
-    },
-    "image_size": 384,
-    "initializer_range": 0.02,
-    "intermediate_size": 3072,
-    "is_decoder": False,
-    "is_encoder_decoder": False,
-    "label2id": {
-      "LABEL_0": 0,
-      "LABEL_1": 1
-    },"layer_norm_eps": 1e-12,
-    "length_penalty": 1.0,
-    "max_length": 20,
-    "min_length": 0,
-    "model_type": "vit",
-    "no_repeat_ngram_size": 0,
-    "num_attention_heads": 12,
-    "num_beam_groups": 1,
-    "num_beams": 1,
-    "num_channels": 3,
-    "num_hidden_layers": 12,
-    "num_return_sequences": 1,
-    "output_attentions": False,
-    "output_hidden_states": False,
-    "output_scores": False,
-    "pad_token_id": None,
-    "patch_size": 16,
-    "prefix": None,
-    "problem_type": None,
-    "pruned_heads": {},
-    "qkv_bias": False,
-    "remove_invalid_values": False,
-    "repetition_penalty": 1.0,
-    "return_dict": True,
-    "return_dict_in_generate": False,
-    "sep_token_id": None,
-    "suppress_tokens": None,
-    "task_specific_params": None,
-    "temperature": 1.0,
-    "tf_legacy_loss": None,
-    "tie_encoder_decoder": None,
-    "tie_word_embeddings": None,
-    "tokenizer_class": None,
-    "top_k": 50,
-    "top_p": 1.0,
-    "torch_dtype": None,
-    "torchscript": False,
-    "typical_p": 1.0,
-    "use_bfloat16": False
-}
-
-
 class ViTConfig(PretrainedConfig):
     
     model_type = "vit"
@@ -270,19 +192,14 @@ class ViTSelfAttention(nn.Module):
         value_layer = self.transpose_for_scores(self.value(hidden_states))
         query_layer = self.transpose_for_scores(mixed_query_layer)
 
-        # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
 
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
 
-        # Normalize the attention scores to probabilities.
         attention_probs = nn.functional.softmax(attention_scores, dim=-1)
 
-        # This is actually dropping out entire tokens to attend to, which might
-        # seem a bit unusual, but is taken from the original Transformer paper.
         attention_probs = self.dropout(attention_probs)
 
-        # Mask heads if we want to
         if head_mask is not None:
             attention_probs = attention_probs * head_mask
 
@@ -395,21 +312,18 @@ class ViTLayer(nn.Module):
         output_attentions: bool = False,
     ) -> Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor]]:
         self_attention_outputs = self.attention(
-            self.layernorm_before(hidden_states),  # in ViT, layernorm is applied before self-attention
+            self.layernorm_before(hidden_states), 
             head_mask,
             output_attentions=output_attentions,
         )
         attention_output = self_attention_outputs[0]
-        outputs = self_attention_outputs[1:]  # add self attentions if we output attention weights
+        outputs = self_attention_outputs[1:] 
 
-        # first residual connection
         hidden_states = attention_output + hidden_states
 
-        # in ViT, layernorm is also applied after self-attention
         layer_output = self.layernorm_after(hidden_states)
         layer_output = self.intermediate(layer_output)
 
-        # second residual connection is done here
         layer_output = self.output(layer_output, hidden_states)
 
         outputs = (layer_output,) + outputs
@@ -423,8 +337,7 @@ class ViTPooler(nn.Module):
         self.activation = nn.Tanh()
 
     def forward(self, hidden_states):
-        # We "pool" the model by simply taking the hidden state corresponding
-        # to the first token.
+
         first_token_tensor = hidden_states[:, 0]
         pooled_output = self.dense(first_token_tensor)
         pooled_output = self.activation(pooled_output)
@@ -498,10 +411,9 @@ class ViTModel(PreTrainedModel):
         self.post_init()
     
     def _init_weights(self, module: Union[nn.Linear, nn.Conv2d, nn.LayerNorm]) -> None:
-        """Initialize the weights"""
+
         if isinstance(module, (nn.Linear, nn.Conv2d)):
-            # Upcast the input in `fp32` and cast it back to desired `dtype` to avoid
-            # `trunc_normal_cpu` not implemented in `half` issues
+
             module.weight.data = nn.init.trunc_normal_(
                 module.weight.data.to(torch.float32), mean=0.0, std=self.config.initializer_range
             ).to(module.weight.dtype)
@@ -527,10 +439,7 @@ class ViTModel(PreTrainedModel):
         return self.embeddings.patch_embeddings
 
     def _prune_heads(self, heads_to_prune: Dict[int, List[int]]) -> None:
-        """
-        Prunes heads of the model. heads_to_prune: dict of {layer_num: list of heads to prune in this layer} See base
-        class PreTrainedModel
-        """
+
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
     def forward(
@@ -543,10 +452,7 @@ class ViTModel(PreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
-        r"""
-        bool_masked_pos (`torch.BoolTensor` of shape `(batch_size, num_patches)`, *optional*):
-            Boolean masked positions. Indicates which patches are masked (1) and which aren't (0).
-        """
+
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -556,14 +462,7 @@ class ViTModel(PreTrainedModel):
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
 
-        # Prepare head mask if needed
-        # 1.0 in head_mask indicate we keep the head
-        # attention_probs has shape bsz x n_heads x N x N
-        # input head_mask has shape [num_heads] or [num_hidden_layers x num_heads]
-        # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
-
-        # TODO: maybe have a cleaner way to cast the input (from `ImageProcessor` side?)
         expected_dtype = self.embeddings.patch_embeddings.projection.weight.dtype
         if pixel_values.dtype != expected_dtype:
             pixel_values = pixel_values.to(expected_dtype)
